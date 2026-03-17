@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "Editor.h"
 
 KeyDipAudioProcessor::KeyDipAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -11,7 +12,10 @@ KeyDipAudioProcessor::KeyDipAudioProcessor()
 					 #endif
 					   ),
 	mtsesp(MTS_RegisterClient()),
+	freqsArray(),
 	apvts(*this, nullptr, "PARAMETERS", createParameterLayout()),
+	bufferFilter(),
+	envBuffer(),
 	voices(),
 	q(-1.f),
 	gain(-40.f),
@@ -28,37 +32,37 @@ juce::AudioProcessorValueTreeState::ParameterLayout KeyDipAudioProcessor::create
 
 	layout.add (std::make_unique<juce::AudioParameterFloat>
 		(
-		"qFactor", "Q Factor",
+		"q", "Q Factor",
 		juce::NormalisableRange<float> (1.f, 30.0f, 0.1f, 1.0f),
-			25.0f
+			12.0f
 		));
 
 	layout.add (std::make_unique<juce::AudioParameterFloat>
 		(
 		"gain", "Gain",
-		juce::NormalisableRange<float>(-60.0f, 0.0f, 0.1f, 1.0f),
-			-40.0f
+		juce::NormalisableRange<float>(-80.0f, 0.0f, 0.1f, 1.0f),
+			-60.0f
 		));
 
 	layout.add (std::make_unique<juce::AudioParameterFloat>
 		(
 		"attack", "Attack",
-		juce::NormalisableRange<float> (.1f, 420.0f, 0.1f, 0.2f),
-			20.0f
+		juce::NormalisableRange<float> (.1f, 800.0f, 0.1f, 0.1f),
+			.1f
 		));
 
 	layout.add (std::make_unique<juce::AudioParameterFloat>
 		(
 		"release", "Release",
-		juce::NormalisableRange<float> (.1f, 420.0f, 0.1f, 0.2f),
-			60.0f
+		juce::NormalisableRange<float> (.1f, 800.0f, 0.1f, 0.1f),
+			87.0f
 		));
 
 	layout.add (std::make_unique<juce::AudioParameterFloat>
 		(
 		"trim", "Trim",
 		juce::NormalisableRange<float>(0.0f, 12.0f, 0.1f, 1.0f),
-			0.0f
+			3.0f
 		));
 
 	return layout;
@@ -135,6 +139,8 @@ void KeyDipAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 	spec.sampleRate = sampleRate;
 	spec.maximumBlockSize = samplesPerBlock;
 	spec.numChannels = getTotalNumOutputChannels();
+	bufferFilter.setSize(spec.numChannels, spec.maximumBlockSize, false, false, false);
+	envBuffer.resize(spec.maximumBlockSize);
 
 	for (auto& voice : voices)
 		voice.prepare(spec);
@@ -181,12 +187,31 @@ void KeyDipAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
 		buffer.clear (i, 0, numSamples);
 	if (numSamples == 0)
 		return;
-	static constexpr float Eps = .0001f;
+	
+	bool mtsUpdated = false;
+	for (auto i = 0; i < 128; ++i)
+	{
+		auto mtsFreq = static_cast<float>(MTS_NoteToFrequency(mtsesp, static_cast<char>(i), -1));
+		const auto curFreq = freqsArray[i];
+		if (curFreq != mtsFreq)
+		{
+			mtsUpdated = true;
+			freqsArray[i] = mtsFreq;
+			for (i = i + 1; i < 128; ++i)
+			{
+				mtsFreq = static_cast<float>(MTS_NoteToFrequency(mtsesp, static_cast<char>(i), -1));
+				freqsArray[i] = mtsFreq;
+			}
+		}
+	}
 
-	const auto currentQFactor = apvts.getRawParameterValue("qFactor")->load();
+	static constexpr float Eps = .0001f;
+	
+	const auto currentQFactor = apvts.getRawParameterValue("q")->load();
 	const auto currentGain = apvts.getRawParameterValue("gain")->load();
 	if (std::abs(currentQFactor - q) > Eps ||
-		std::abs(currentGain - gain) > Eps)
+		std::abs(currentGain - gain) > Eps ||
+		mtsUpdated)
 	{
 		q = currentQFactor;
 		gain = currentGain;
@@ -212,6 +237,8 @@ void KeyDipAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
 		}
 	}
 
+	auto blockFilter = juce::dsp::AudioBlock<float>(bufferFilter);
+
 	auto s = 0;
 	for (const auto metadata : midiMessages)
 	{
@@ -223,9 +250,8 @@ void KeyDipAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
 			const auto numSamplesSub = ts - s;
 			juce::dsp::AudioBlock<float> block(buffer);
 			auto subBlock = block.getSubBlock(s, numSamplesSub);
-			juce::dsp::ProcessContextReplacing<float> context(subBlock);
 			for (int i = 0; i < NumVoices; ++i)
-				voices[i](context);
+				voices[i](subBlock, blockFilter, envBuffer.data());
 		}
 
 		if (msg.isNoteOn())
@@ -257,9 +283,8 @@ void KeyDipAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
 		juce::dsp::AudioBlock<float> block(buffer);
 		const auto numSamplesSub = ts - s;
 		auto subBlock = block.getSubBlock(s, numSamplesSub);
-		juce::dsp::ProcessContextReplacing<float> context(subBlock);
 		for (int i = 0; i < NumVoices; ++i)
-			voices[i](context);
+			voices[i](subBlock, blockFilter, envBuffer.data());
 	}
 
 	const auto trimDb = apvts.getRawParameterValue("trim")->load();
@@ -270,12 +295,12 @@ void KeyDipAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
 
 bool KeyDipAudioProcessor::hasEditor() const
 {
-    return false;
+    return true;
 }
 
 juce::AudioProcessorEditor* KeyDipAudioProcessor::createEditor()
 {
-    return nullptr;
+	return new KeyDipAudioProcessorEditor(*this);
 }
 
 void KeyDipAudioProcessor::getStateInformation (juce::MemoryBlock& destData)

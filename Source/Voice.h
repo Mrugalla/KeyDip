@@ -12,7 +12,6 @@ public:
     Voice() :
         filter(),
         envelope(),
-        envBuffer(),
         sampleRate(1.),
         freq(1.f),
         q(1.f),
@@ -22,10 +21,16 @@ public:
 		noteNumber(-1)
     {}
 
+    void resetFilter() noexcept
+    {
+        filter.reset();
+	}
+
     void updateFilter(float _q, float _gain) noexcept
     {
 		q = _q;
         gain = _gain;
+        updateFilter();
     }
 
     void updateEnvelope(float _atk, float _rls) noexcept
@@ -42,25 +47,28 @@ public:
         filter.prepare(spec);
 		envelope.prepare(static_cast<float>(sampleRate));
         processNoteOff();
-        envBuffer.resize(spec.maximumBlockSize);
+        updateFilter();
     }
 
-	void operator()(juce::dsp::ProcessContextReplacing<float>& context) noexcept
+	void operator()(juce::dsp::AudioBlock<float>& block, juce::dsp::AudioBlock<float>& blockFilter,
+        float* envBuffer) noexcept
 	{
-		const auto block = context.getOutputBlock();
+        juce::dsp::ProcessContextNonReplacing<float> context(block, blockFilter);
+        filter.process(context);
+        const auto numChannels = block.getNumChannels();
 		const auto numSamples = block.getNumSamples();
 		for (auto s = 0; s < numSamples; ++s)
 		{
 			auto env = envelope();
-			envBuffer[s] = env;
+            envBuffer[s] = env * (1.f - gain);
 		}
-		const auto gainMod = 1.f + envBuffer[0] * (gain - 1.f);
-        auto& duplicator = filter.get<0>();
-        *duplicator.state = *juce::dsp::IIR::Coefficients<float>::makePeakFilter
-        (
-            sampleRate, freq, q, gainMod
-        );
-        filter.process(context);
+		for (auto ch = 0; ch < numChannels; ++ch)
+        {
+			const auto smplsFilter = blockFilter.getChannelPointer(ch);
+            auto smpls = block.getChannelPointer(ch);
+            for (auto s = 0; s < numSamples; ++s)
+                smpls[s] -= smplsFilter[s] * envBuffer[s];
+        }
 	}
 
     void processNoteOn(MTSClient* mtsesp, int _noteNumber) noexcept
@@ -68,6 +76,8 @@ public:
 		noteNumber = _noteNumber;
 		const auto note = static_cast<char>(noteNumber);
         freq = static_cast<float>(MTS_NoteToFrequency(mtsesp, note, -1));
+        updateFilter();
+        filter.reset();
         envelope.trigger();
     }
 
@@ -86,8 +96,16 @@ public:
 private:
     FilterChain filter;
     EnvelopeGenerator envelope;
-    std::vector<float> envBuffer;
     double sampleRate;
     float freq, q, gain, atk, rls;
     int noteNumber;
+
+    void updateFilter()
+    {
+        auto& duplicator = filter.get<0>();
+        *duplicator.state = *juce::dsp::IIR::Coefficients<float>::makeBandPass
+        (
+            sampleRate, freq, q
+        );
+    }
 };

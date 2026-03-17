@@ -8,6 +8,8 @@
               pluginAAXCategory="8192" cppLanguageStandard="20">
   <MAINGROUP id="DxOuSM" name="KeyDip">
     <GROUP id="{AB1C57CF-7AE0-0892-9896-E81BE1A1E21F}" name="Source">
+      <FILE id="zdiqWQ" name="bg.png" compile="0" resource="1" file="Source/bg.png"/>
+      <FILE id="xlpLAt" name="Editor.h" compile="0" resource="0" file="Source/Editor.h"/>
       <FILE id="wvYtiz" name="EnvelopeGenerator.h" compile="0" resource="0"
             file="Source/EnvelopeGenerator.h"/>
       <FILE id="MN5VpK" name="libMTSClient.cpp" compile="1" resource="0"

@@ -38,10 +38,12 @@ struct KeyDipAudioProcessor :
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-private:
     static constexpr int NumVoices = 16;
     MTSClient* mtsesp;
+    std::array<float, 128> freqsArray;
     juce::AudioProcessorValueTreeState apvts;
+    juce::AudioBuffer<float> bufferFilter;
+    std::vector<float> envBuffer;
     std::array<Voice, NumVoices> voices;
     float q, gain, atk, rls;
     int activeFilterIndex;
