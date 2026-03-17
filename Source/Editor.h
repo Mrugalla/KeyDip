@@ -53,6 +53,11 @@ struct KeyDipAudioProcessorEditor :
 		attackSlider.setColour(juce::Slider::textBoxTextColourId, juce::Colours::black);
 		releaseSlider.setColour(juce::Slider::textBoxTextColourId, juce::Colours::black);
 		trimSlider.setColour(juce::Slider::textBoxTextColourId, juce::Colours::black);
+		qSlider.setColour(juce::Slider::thumbColourId, juce::Colours::black);
+		gainSlider.setColour(juce::Slider::thumbColourId, juce::Colours::black);
+		attackSlider.setColour(juce::Slider::thumbColourId, juce::Colours::black);
+		releaseSlider.setColour(juce::Slider::thumbColourId, juce::Colours::black);
+		trimSlider.setColour(juce::Slider::thumbColourId, juce::Colours::black);
 
 		setOpaque(true);
         setSize(420, 240);

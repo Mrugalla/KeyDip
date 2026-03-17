@@ -42,6 +42,7 @@ struct KeyDipAudioProcessor :
     MTSClient* mtsesp;
     std::array<float, 128> freqsArray;
     juce::AudioProcessorValueTreeState apvts;
+	std::atomic<float> &qParam, &gainParam, &atkParam, &rlsParam, &trimParam;
     juce::AudioBuffer<float> bufferFilter;
     std::vector<float> envBuffer;
     std::array<Voice, NumVoices> voices;

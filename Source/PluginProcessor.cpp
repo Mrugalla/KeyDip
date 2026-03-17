@@ -14,6 +14,11 @@ KeyDipAudioProcessor::KeyDipAudioProcessor()
 	mtsesp(MTS_RegisterClient()),
 	freqsArray(),
 	apvts(*this, nullptr, "PARAMETERS", createParameterLayout()),
+	qParam(*apvts.getRawParameterValue("q")),
+	gainParam(*apvts.getRawParameterValue("gain")),
+	atkParam(*apvts.getRawParameterValue("attack")),
+	rlsParam(*apvts.getRawParameterValue("release")),
+	trimParam(*apvts.getRawParameterValue("trim")),
 	bufferFilter(),
 	envBuffer(),
 	voices(),
@@ -47,14 +52,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout KeyDipAudioProcessor::create
 	layout.add (std::make_unique<juce::AudioParameterFloat>
 		(
 		"attack", "Attack",
-		juce::NormalisableRange<float> (.1f, 800.0f, 0.1f, 0.1f),
+		juce::NormalisableRange<float> (.1f, 800.0f, 0.01f, 0.3f),
 			.1f
 		));
 
 	layout.add (std::make_unique<juce::AudioParameterFloat>
 		(
 		"release", "Release",
-		juce::NormalisableRange<float> (.1f, 800.0f, 0.1f, 0.1f),
+		juce::NormalisableRange<float> (.1f, 800.0f, 0.01f, 0.3f),
 			87.0f
 		));
 
@@ -207,24 +212,32 @@ void KeyDipAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
 
 	static constexpr float Eps = .0001f;
 	
-	const auto currentQFactor = apvts.getRawParameterValue("q")->load();
-	const auto currentGain = apvts.getRawParameterValue("gain")->load();
-	if (std::abs(currentQFactor - q) > Eps ||
-		std::abs(currentGain - gain) > Eps ||
-		mtsUpdated)
+	const auto currentQFactor = qParam.load();
+	
+	if (std::abs(currentQFactor - q) > Eps || mtsUpdated)
 	{
 		q = currentQFactor;
+		for (auto i = 0; i < NumVoices; ++i)
+		{
+			auto& voice = voices[i];
+			voice.updateFilter(q);
+		}
+	}
+
+	const auto currentGain = gainParam.load();
+	if (std::abs(currentGain - gain) > Eps)
+	{
 		gain = currentGain;
 		const auto gainAmp = std::pow(10.f, gain / 20.f);
 		for (auto i = 0; i < NumVoices; ++i)
 		{
 			auto& voice = voices[i];
-			voice.updateFilter(q, gainAmp);
+			voice.updateGain(gainAmp);
 		}
 	}
 
-	const auto currentAttack = apvts.getRawParameterValue("attack")->load();
-	const auto currentRelease = apvts.getRawParameterValue("release")->load();
+	const auto currentAttack = atkParam.load();
+	const auto currentRelease = rlsParam.load();
 	if(std::abs(currentAttack - atk) > Eps ||
 		std::abs(currentRelease - rls) > Eps)
 	{
@@ -287,7 +300,7 @@ void KeyDipAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
 			voices[i](subBlock, blockFilter, envBuffer.data());
 	}
 
-	const auto trimDb = apvts.getRawParameterValue("trim")->load();
+	const auto trimDb = trimParam.load();
 	const auto trimAmp = std::pow(10.f, trimDb / 20.f);
 	for (int i = 0; i < totalNumOutputChannels; ++i)
 		buffer.applyGain(i, 0, numSamples, trimAmp);

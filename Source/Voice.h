@@ -26,10 +26,14 @@ public:
         filter.reset();
 	}
 
-    void updateFilter(float _q, float _gain) noexcept
+    void updateGain(float _gain) noexcept
+    {
+        gain = _gain;
+	}
+
+    void updateFilter(float _q) noexcept
     {
 		q = _q;
-        gain = _gain;
         updateFilter();
     }
 
