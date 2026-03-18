@@ -5,3 +5,6 @@ KeyDip dips bells on the fundamental frequencies of your MIDI inputs.
 - 16 voices
 - MTS-ESP support
 - Funky interface
+
+Making Of:
+https://www.youtube.com/watch?v=GjIQ2xqIZfc
