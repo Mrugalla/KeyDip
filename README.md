@@ -20,3 +20,4 @@ I will make a new KeyDip plugin with lots of nice details at some point tho :) T
 - There is no parameter for transposing MIDI in octaves, which is annoying in all DAWs that don't natively support MTS-ESP.
 - There should be an option for increasing the filter's slope to make it sound more dramatic.
 - Next time I'll make this plugin I'll definitely add something nonlinear to the filter.
+- Keytracking gain to define the spectral sweet spot of the effect.
