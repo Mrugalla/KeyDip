@@ -10,6 +10,9 @@ KeyDip dips bells on the fundamental frequencies of your MIDI inputs.
 
 -----------------------------------------------------------
 
+Demo:
+https://youtu.be/Q1Trlkvb61U?si=aOSQrt-_MDEEqn7i
+
 Making Of:
 https://www.youtube.com/watch?v=GjIQ2xqIZfc
 
